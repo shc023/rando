@@ -1,0 +1,107 @@
+var React = require('react');
+var ReactDOM = require('react-dom');
+
+var Grid = require('react-bootstrap/lib/grid');
+var Row = require('react-bootstrap/lib/row');
+var Col = require('react-bootstrap/lib/col');
+
+var M = require('material-ui/lib');
+
+var LoginForm = require('./login-form');
+var VideoModule = require('./video-module');
+
+var SimpleWebRTC = require('simplewebrtc');
+var io = require('socket.io-client');
+
+var App = React.createClass({
+	displayName: 'App',
+	webrtcSession: null,
+	eventSocket: null,
+	getInitialState: function(){
+		return {
+			loading: true,
+			chatting: false,
+			you: null,
+			other: null
+		};
+	},
+	componentDidMount: function(){
+		var self = this;
+		this.webrtcSession = new SimpleWebRTC({
+		    // the id/element dom element that will hold "our" video
+		    localVideoEl: 'local-video',
+		    // the id/element dom element that will hold remote videos
+		    remoteVideosEl: 'remote-video',
+		    // immediately ask for camera access
+		    autoRequestMedia: true,
+		    // url: window.location.hostname+':9001'
+		    url: window.location.hostname+':9001'
+		});
+
+		// we have to wait until it's ready
+		// TODO: move this to another function?
+		this.webrtcSession.on('readyToCall', function () {
+			self.setState({loading: false});
+		});
+	},
+	onMatchRequest: function(user){
+		var self = this;
+		this.eventSocket = io('', {query: 'user=' + JSON.stringify(user)});
+
+		self.setState({you: user});
+
+		this.eventSocket.on('matched', function(other){
+		  self.webrtcSession.joinRoom(other.room);  
+		  self.setState({
+		  	other: other,
+		  	chatting:true
+		  });
+		});
+	},
+    render: function(){
+        return 	<Grid fluid={true}>
+					<Row>
+						<M.AppBar title="App Name" />
+					</Row>
+        			<Row>
+    					<Col lg={3} lgPush={1}>
+    						{
+    							this.state.you ?
+    							<div>
+	    							<M.Paper>
+	    								<h3>You are ...</h3>
+	    								<h5>{this.state.you.name}</h5>
+	    								<h5>From {this.state.you.city}</h5>
+	    							</M.Paper>
+									{
+										this.state.other ?
+										<M.Paper>
+		    								<h3>Chatting with...</h3>
+		    								<h5>{this.state.other.name}</h5>
+		    								<h5>From {this.state.other.city}</h5>
+										</M.Paper>
+										: <h3>Searching for a match...</h3>
+									}
+								</div>
+								: 
+	    						<LoginForm 
+									disabled={this.state.loading}
+									onMatchRequest={this.onMatchRequest} />	
+    						}
+    					</Col>
+    					<Col lg={6} lgPush={2}>
+    						<VideoModule 
+    							chatting={this.state.chatting}/>
+    					</Col>
+    				</Row>
+        		</Grid>
+    }
+});
+
+var injectTapEventPlugin = require("react-tap-event-plugin");
+injectTapEventPlugin();
+
+ReactDOM.render(
+  <App />,
+  document.getElementById('app')
+);
